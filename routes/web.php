@@ -26,3 +26,5 @@ $router->get('/api/forexcurrency', function() use ($router){
 $router->get('/api', function() use ($router){
     return response()->json(['status' => false, 'message' => 'Missing Token']);
 });
+
+$router->get('/generatetoken', 'TokenController@GenerateNewToken');

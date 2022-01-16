@@ -45,7 +45,7 @@ class TokenController extends Controller
 
         if ($count == 0) {
             return true;
-        } else {ň
+        } else {
             return false;
         }
     }
