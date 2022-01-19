@@ -23,6 +23,11 @@ class TokenController extends Controller
     }
 
     //Generate a new API key
+
+    /**
+     * @return false|void
+     * @throws \Exception
+     */
     public function GenerateToken()
     {
         $new_token = hash('sha3-512', bin2hex(random_bytes(255)));
@@ -37,6 +42,11 @@ class TokenController extends Controller
     }
 
     //Verify that the API key no longer exists
+
+    /**
+     * @param $new_token
+     * @return bool
+     */
     public function CheckNewTokenDB($new_token)
     {
         $count = DB::table('AccessTokens')
@@ -51,6 +61,11 @@ class TokenController extends Controller
     }
 
     //Save the new API key to the database
+
+    /**
+     * @param $new_token
+     * @return false
+     */
     public function SaveNewTokenDB($new_token)
     {
         $save = DB::table('AccessTokens')->insert([
