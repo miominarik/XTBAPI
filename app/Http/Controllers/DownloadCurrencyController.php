@@ -99,7 +99,7 @@ class DownloadCurrencyController extends Controller
                                         ]);
 
                                     //Calculate TR
-                                    $tr = $this->TrCalculation($one_symbol['symbol'], $last_row->close);
+                                    $tr = $this->TrCalculation($one_symbol['symbol'], $one_symbol['bid']);
 
                                     //Calculate ATR
                                     $atr = $this->AtrCalculation($one_symbol['symbol'], $tr);
@@ -207,7 +207,7 @@ class DownloadCurrencyController extends Controller
 
                 if (isset($sum_arr) && !empty($sum_arr)) {
                     if (count($sum_arr) >= $atr_n_value->value) {
-                        return (1 / $atr_n_value->value) + array_sum($sum_arr);
+                        return (1 / $atr_n_value->value) * array_sum($sum_arr);
                     } else {
                         return null;
                     }
