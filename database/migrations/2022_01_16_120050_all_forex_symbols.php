@@ -15,13 +15,15 @@ class AllForexSymbols extends Migration
     {
         Schema::create('AllForexSymbols', function (Blueprint $table) {
             $table->id();
-            $table->string('symbol', 6);
+            $table->string('symbol', 20);
             $table->string('currency', 5);
             $table->string('categoryName', 5);
             $table->string('groupName', 100);
-            $table->text('description');
+            $table->double('open', 9, 4)->nullable();
+            $table->double('close', 9, 4)->nullable();
+            $table->double('tr', 9, 4)->nullable();
+            $table->double('atr', 9, 4)->nullable();
             $table->double('bid', 9, 4);
-            $table->double('ask', 9, 4);
             $table->double('high', 9, 4);
             $table->double('low', 9, 4);
             $table->timestamp('time');
