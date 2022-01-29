@@ -9,8 +9,9 @@ use Illuminate\Support\Carbon;
 
 class DownloadCurrencyController extends Controller
 {
+
     /**
-     * Create a new controller instance.
+     * __construct
      *
      * @return void
      */
@@ -36,7 +37,7 @@ class DownloadCurrencyController extends Controller
     /**
      * Obtain current exchange rates of major currency pairs and save to the database.
      *
-     * @param  string  $api_token
+     * @param string $api_token
      */
     public function GetMajorForexCurrency($api_token)
     {
@@ -72,7 +73,7 @@ class DownloadCurrencyController extends Controller
 
                         foreach ($all_symbols['returnData'] as $one_symbol) {
                             //Get only Forex and Major
-                            if ($one_symbol['categoryName'] == 'FX' and $one_symbol['groupName'] == 'Major') {
+                            if ($one_symbol['categoryName'] == 'CRT' and $one_symbol['groupName'] == 'Crypto' and $one_symbol['symbol'] == 'CARDANO') {
 
                                 //Records of the number of calls of a given token
                                 DB::table('AccessTokens')
@@ -82,23 +83,54 @@ class DownloadCurrencyController extends Controller
                                         'updated_at' => Carbon::now()
                                     ]);
 
+                                //Get data from previous row in tablet
+                                $last_row = DB::table('AllForexSymbols')
+                                    ->select(['id', 'bid', 'close'])
+                                    ->where('symbol', '=', $one_symbol['symbol'])
+                                    ->orderBy('id', 'DESC')
+                                    ->first();
+
+                                if (isset($last_row->id) && !empty($last_row->id)) {
+                                    //Update close price in previous row
+                                    DB::table('AllForexSymbols')
+                                        ->where('id', '=', $last_row->id)
+                                        ->update([
+                                            'close' => $one_symbol['bid']
+                                        ]);
+
+                                    //Calculate TR
+                                    $tr = $this->TrCalculation($one_symbol['symbol'], $last_row->close);
+
+                                    //Calculate ATR
+                                    $atr = $this->AtrCalculation($one_symbol['symbol'], $tr);
+                                };
+
                                 //Adding data to the database.
-                                $return = DB::table('AllForexSymbols')->insert([
+                                $return_id = DB::table('AllForexSymbols')->insertGetId([
                                     'symbol' => $one_symbol['symbol'],
                                     'currency' => $one_symbol['currency'],
                                     'categoryName' => $one_symbol['categoryName'],
                                     'groupName' => $one_symbol['groupName'],
-                                    'description' => $one_symbol['description'],
+                                    'open' => isset($last_row->bid) ? $last_row->bid : null,
                                     'bid' => $one_symbol['bid'],
-                                    'ask' => $one_symbol['ask'],
                                     'high' => $one_symbol['high'],
                                     'low' => $one_symbol['low'],
                                     'time' => Carbon::createFromTimestampMs($one_symbol['time'])->format('Y-m-d H:i:s'),
                                     'created_at' => Carbon::now()
                                 ]);
+
+                                if (isset($last_row->id) && !empty($last_row->id)) {
+                                    //TR save
+                                    DB::table('AllForexSymbols')
+                                        ->where('id', '=', $return_id)
+                                        ->update([
+                                            'tr' => $tr,
+                                            'atr' => $atr
+                                        ]);
+                                }
                             }
                         }
-                        if ($return == true) {
+                        if ($return_id) {
                             return response()->json(['status' => true, 'message' => 'The data was successfully imported into the database.']);
                         } else {
                             return response()->json(['status' => false, 'message' => 'Failed to import data into database']);
@@ -109,9 +141,82 @@ class DownloadCurrencyController extends Controller
                 } else {
                     return response()->json(['status' => false, 'message' => 'Incorrect XTB API login information']);
                 }
-            }else{
+            } else {
                 return response()->json(['status' => false, 'message' => 'Incorrect login information']);
             }
         }
+    }
+
+    /**
+     * Calculates and returns the TR value
+     *
+     * @param  string $symbol
+     * @param  float $close_prev
+     * @return int/float/null
+     */
+    public function TrCalculation($symbol, $close_prev)
+    {
+        $values = DB::table('AllForexSymbols')
+            ->select('high', 'low')
+            ->where('symbol', '=', $symbol)
+            ->orderBy('id', 'DESC')
+            ->first();
+
+        if (isset($values->high) && isset($values->low) && !empty($values->high) && !empty($values->low)) {
+            return max(($values->high - $values->low), abs($values->high - $close_prev), abs($values->low - $close_prev));
+        } else {
+            return null;
+        };
+    }
+
+    /**
+     * Calculates and returns the ATR value
+     *
+     * @param string $symbol
+     * @return int/float/null
+     */
+    public function AtrCalculation($symbol, $actual_tr)
+    {
+        $atr_n_value = DB::table('Settings')
+            ->select('value')
+            ->where('name', 'atr_n_value')
+            ->first();
+
+        if (isset($atr_n_value->value) && !empty($atr_n_value->value)) {
+            $last_atr = DB::table('AllForexSymbols')
+                ->select('atr')
+                ->where('symbol', '=', $symbol)
+                ->orderBy('id', 'DESC')
+                ->first();
+
+            if (isset($last_atr->atr) && !empty($last_atr->atr)) {
+                return ($last_atr->atr * ($atr_n_value->value - 1) + $actual_tr) / $atr_n_value->value;
+            } else {
+                $sum_arr = array();
+
+                $values = DB::table('AllForexSymbols')
+                    ->select('tr')
+                    ->where('symbol', '=', $symbol)
+                    ->orderBy('id', 'DESC')
+                    ->limit($atr_n_value->value)
+                    ->get();
+
+                foreach ($values as $value) {
+                    array_push($sum_arr, $value->tr);
+                }
+
+                if (isset($sum_arr) && !empty($sum_arr)) {
+                    if (count($sum_arr) >= $atr_n_value->value) {
+                        return (1 / $atr_n_value->value) + array_sum($sum_arr);
+                    } else {
+                        return null;
+                    }
+                } else {
+                    return null;
+                };
+            };
+        } else {
+            return null;
+        };
     }
 }
